@@ -5,9 +5,9 @@ import { expandSourcePlaceholders } from "./utils/source_code.ts";
 import { formatMarkdown } from "./utils/format_markdown.ts";
 import { formatDefinitionDescriptions } from "./utils/format_definition_descriptions.ts";
 import { fileChecksum } from "./utils/checksum.ts";
-import checksums from "./checksums.json" assert { type: "json" };
+import checksums from "./checksums.json" with { type: "json" };
 import { VERSION } from "./version.ts";
-import packageJson from "../dist/node/package.json" assert { type: "json" };
+import packageJson from "../dist/node/package.json" with { type: "json" };
 
 // -----------------------------------------------------------------------------
 
@@ -124,37 +124,7 @@ for (const draftId of drafts) {
     { overwrite: true },
   );
 
-  // -------------------------------------------------------------------------
-  // Compile to JS
-  // -------------------------------------------------------------------------
-  const { files } = await Deno.emit(outputFilename, {
-    bundle: "module",
-    compilerOptions: { target: "es6" },
-  });
-
-  const js = files["deno:///bundle.js"];
-  const map = files["deno:///bundle.js.map"];
-
-  // Write to the node directory
-  const mapJson = JSON.parse(map) as { sources: string[] };
-  mapJson.sources = mapJson.sources.map((source) => path.basename(source));
-
-  await Deno.writeTextFile(
-    path.join(NODE_DIR, `draft-${nodeDraftId}.js`),
-    [
-      `/// <reference types="./draft-${nodeDraftId}.ts" />`,
-      "// @generated",
-      js,
-      `//# sourceMappingURL=draft-${nodeDraftId}.js.map`,
-    ].join("\n"),
-  );
-
-  await Deno.writeTextFile(
-    path.join(NODE_DIR, `draft-${nodeDraftId}.js.map`),
-    JSON.stringify(mapJson),
-  );
-
-  console.log(`draft_${draftId}: complete`);
+  console.log(`draft_${draftId}: generated TS and Deno copy`);
 }
 
 // -----------------------------------------------------------------------------
@@ -272,23 +242,98 @@ for (const dir of ALL_DIST_DIRS) {
 }
 
 // -----------------------------------------------------------------------------
+// Compile JS
+// -----------------------------------------------------------------------------
+{
+  const tsconfigPath = path.join(CWD, "tsconfig.node-build.json");
+  try {
+    const p = Deno.run({ cmd: ["tsc", "-p", tsconfigPath] });
+    const status = await p.status();
+    p.close();
+
+    if (!status.success) {
+      throw new Error(
+        "TypeScript JS emit failed. Ensure 'typescript' is installed.",
+      );
+    }
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Emit declarations
+// -----------------------------------------------------------------------------
+{
+  const tsconfigPath = path.join(CWD, "tsconfig.declarations.json");
+  try {
+    const p = Deno.run({ cmd: ["tsc", "-p", tsconfigPath] });
+    const status = await p.status();
+    p.close();
+
+    if (!status.success) {
+      throw new Error(
+        "TypeScript declaration emit failed. Ensure 'typescript' is installed.",
+      );
+    }
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Inject JS type reference headers
+// -----------------------------------------------------------------------------
+for (const draftId of drafts) {
+  const nodeDraftId = draftId.replaceAll("_", "-");
+  const jsPath = path.join(NODE_DIR, `draft-${nodeDraftId}.js`);
+
+  const content = await Deno.readTextFile(jsPath);
+  const header = [
+    `/// <reference types=\"./draft-${nodeDraftId}.d.ts\" />`,
+    "// @generated",
+  ].join("\n");
+
+  if (!content.startsWith(header)) {
+    await Deno.writeTextFile(jsPath, `${header}\n${content}`);
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Update json-schema-typed package.json
 // -----------------------------------------------------------------------------
 {
   packageJson.version = VERSION;
   packageJson.main = `./draft-${nodeLatestDraft}.js`;
+  packageJson.types = `./draft-${nodeLatestDraft}.d.ts`;
   // @ts-expect-error this is valid
   packageJson.exports = {
-    ".": `./draft-${nodeLatestDraft}.js`,
+    ".": {
+      types: `./draft-${nodeLatestDraft}.d.ts`,
+      default: `./draft-${nodeLatestDraft}.js`,
+    },
     ...Object.fromEntries(
-      drafts.map((
-        draftId,
-      ) => {
+      drafts.map((draftId) => {
         const nodeDraftId = draftId.replaceAll("_", "-");
-        return [`./draft-${nodeDraftId}`, `./draft-${nodeDraftId}.js`];
+        return [
+          `./draft-${nodeDraftId}`,
+          {
+            types: `./draft-${nodeDraftId}.d.ts`,
+            default: `./draft-${nodeDraftId}.js`,
+          },
+        ];
       }),
     ),
   };
+  packageJson.files = [
+    "*.js",
+    "*.d.ts",
+    "README.md",
+    "LICENSE.md",
+    "package.json",
+  ];
 
   await Deno.writeTextFile(
     path.join(NODE_DIR, "package.json"),

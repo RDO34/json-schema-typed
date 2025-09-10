@@ -15,10 +15,22 @@
   "main": "./draft-2020-12.js",
   "type": "module",
   "exports": {
-    ".": "./draft-2020-12.js",
-    "./draft-07": "./draft-07.js",
-    "./draft-2019-09": "./draft-2019-09.js",
-    "./draft-2020-12": "./draft-2020-12.js"
+    ".": {
+      "types": "./draft-2020-12.d.ts",
+      "default": "./draft-2020-12.js"
+    },
+    "./draft-07": {
+      "types": "./draft-07.d.ts",
+      "default": "./draft-07.js"
+    },
+    "./draft-2019-09": {
+      "types": "./draft-2019-09.d.ts",
+      "default": "./draft-2019-09.js"
+    },
+    "./draft-2020-12": {
+      "types": "./draft-2020-12.d.ts",
+      "default": "./draft-2020-12.js"
+    }
   },
   "keywords": [
     "jsonschema",
@@ -27,5 +39,13 @@
     "definitions",
     "json",
     "schema"
+  ],
+  "types": "./draft-2020-12.d.ts",
+  "files": [
+    "*.js",
+    "*.d.ts",
+    "README.md",
+    "LICENSE.md",
+    "package.json"
   ]
 }

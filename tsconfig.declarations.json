@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "removeComments": false,
+    "skipLibCheck": true,
+    "strict": true
+  },
+  "include": [
+    "dist/node/*.ts"
+  ]
+}
+
